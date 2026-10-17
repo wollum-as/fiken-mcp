@@ -61,6 +61,8 @@ For spørsmål om Fiken peker assistenten til [Fikens hjelpesider](https://hjelp
 - Bare Claude og ChatGPT kan koble til.
 - Opplastingslenker virker én gang i 15 minutter.
 
+Har du funnet et sikkerhetshull? Send e-post til kontakt@wollums.no, og se [SECURITY.md](SECURITY.md).
+
 Vilkår, personvernerklæring og veiledning ligger på [wollums.no](https://wollums.no).
 
 ## For utviklere
