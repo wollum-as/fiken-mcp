@@ -8,7 +8,7 @@ export const findContacts = defineTool({
   access: "read",
   title: "Finn kunder og leverandører",
   description:
-    "Kunder og leverandører. Søk her før du oppretter en kontakt, så det ikke blir duplikater. Med id: adresse og kontaktpersoner.",
+    "Kunder og leverandører. Søk her før du oppretter en kontakt, så det ikke blir duplikater. Med id: adresse, kontonummer og kontaktpersoner.",
   inputSchema: z.object({
     company: companyInput,
     id: idInput("Kontakt"),

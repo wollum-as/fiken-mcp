@@ -64,6 +64,15 @@ describe("find_contacts", () => {
     expect(params.get("inactive")).toBe("false");
     expect(params.get("name")).toBe("ola");
   });
+
+  it("shows the bank account number in the detail, for paying suppliers", async () => {
+    const transport = routes({
+      "/contacts/5": { contactId: 5, name: "Ola Nordmann", supplier: true, bankAccountNumber: "11112233334" },
+      "/contactPerson": [],
+    });
+    const result = await run(transport, "find_contacts", { company: COMPANY, id: 5 });
+    expect(result.structuredContent).toMatchObject({ contact: { id: 5, name: "Ola Nordmann", bankAccountNumber: "11112233334" } });
+  });
 });
 
 describe("find_products", () => {

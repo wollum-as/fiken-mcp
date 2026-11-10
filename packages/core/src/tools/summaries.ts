@@ -31,6 +31,7 @@ export function contactDetail(contact: S["contact"], persons: S["contactPerson"]
     ...contactSummary(contact),
     phoneNumber: contact.phoneNumber,
     address: contact.address ? compact({ ...contact.address }) : undefined,
+    bankAccountNumber: contact.bankAccountNumber,
     customerAccount: contact.customerAccountCode,
     supplierAccount: contact.supplierAccountCode,
     currency: contact.currency,
