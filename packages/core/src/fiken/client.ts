@@ -28,8 +28,10 @@ export interface Page<T> {
  */
 export class FikenClient {
   readonly api: FikenApi;
+  readonly #transport: FikenTransport;
 
   constructor(transport: FikenTransport) {
+    this.#transport = transport;
     this.api = createClient<paths>({
       baseUrl: BASE_URL.href,
       headers: { accept: "application/json" },
@@ -49,6 +51,25 @@ export class FikenClient {
     const get = this.api.GET as unknown as (path: string, init: { params: typeof params }) => Promise<{ data?: unknown; response: Response }>;
     const { data, response } = await get(path, { params });
     return { data, response };
+  }
+
+  /**
+   * Downloads a file Fiken links to for API clients (`documentUrl`, `downloadUrl`). These are
+   * `https://api.fiken.no/api/v2/files/...` (measured 10.11.2026); anything else is refused.
+   */
+  async download(url: string): Promise<Response> {
+    const parsed = new URL(url);
+    if (parsed.origin !== BASE_URL.origin || !parsed.pathname.startsWith(`${BASE_URL.pathname}/`)) {
+      throw new Error("Refusing a download outside the Fiken API");
+    }
+    const response = await this.#transport.send({ method: "GET", path: parsed.pathname.slice(BASE_URL.pathname.length) + parsed.search });
+    // Transports do not follow redirects, so the token stays on Fiken. Name the target in case Fiken starts redirecting.
+    if (response.status >= 300 && response.status < 400) {
+      const target = response.headers.get("Location");
+      throw new FikenApiError(response.status, `Videresender til ${target ? new URL(target, url).host : "ukjent adresse"}`);
+    }
+    if (!response.ok) throw new FikenApiError(response.status, await readFikenMessage(response.clone()), { write: false });
+    return response;
   }
 
   async listCompanies(): Promise<Page<Company>> {

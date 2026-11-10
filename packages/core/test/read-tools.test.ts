@@ -303,3 +303,122 @@ describe("newest first", () => {
     expect(ids(result)).toEqual([]);
   });
 });
+
+describe("read_file", () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const FILES = "https://api.fiken.no/api/v2/files";
+  const attachment = (filename: string) => ({ filename, downloadUrl: `${FILES}/abc/${filename}`, downloadUrlWithFikenNormalUserCredentials: `https://fiken.no/filer/abc/${filename}` });
+
+  /** Answers metadata from `table` by exact path, and every file download with `file`. */
+  function fiken(table: Record<string, unknown>, file: (request: FikenHttpRequest) => Response = () => new Response("%PDF-1.4", { headers: { "content-type": "application/pdf" } })) {
+    return new MockTransport((request) => {
+      const path = request.path.split("?")[0] ?? "";
+      if (path.startsWith("/files/")) return file(request);
+      return path in table ? json(table[path]) : json({ message: `no route for ${request.path}` }, { status: 404 });
+    });
+  }
+
+  async function readFile(transport: MockTransport, args: Record<string, unknown>) {
+    return run(transport, "read_file", { company: COMPANY, ...args });
+  }
+
+  it("downloads an inbox document's documentUrl and returns an image", async () => {
+    const transport = fiken(
+      { [`/companies/${COMPANY}/inbox/77`]: { documentId: 77, name: "kvittering.png", filename: "kvittering.png", documentUrl: `${FILES}/abc/kvittering.png` } },
+      () => new Response(PNG, { headers: { "content-type": "image/png" } }),
+    );
+    const result = await readFile(transport, { type: "inbox", id: 77 });
+    expect(result.isError).toBeFalsy();
+    expect(transport.requests[1]).toMatchObject({ method: "GET", path: "/files/abc/kvittering.png" });
+    expect(result.content).toEqual([
+      { type: "text", text: JSON.stringify({ file: { filename: "kvittering.png", mimeType: "image/png", bytes: 8 } }) },
+      { type: "image", data: btoa(String.fromCharCode(...PNG)), mimeType: "image/png" },
+    ]);
+  });
+
+  it("returns a PDF as an embedded resource, typed from the file name when Fiken sends octet-stream", async () => {
+    const transport = fiken(
+      { [`/companies/${COMPANY}/purchases/5/attachments`]: [attachment("kvittering.pdf")] },
+      () => new Response("%PDF-1.4", { headers: { "content-type": "application/octet-stream" } }),
+    );
+    const result = await readFile(transport, { type: "purchase", id: 5 });
+    expect(result.content).toContainEqual({
+      type: "resource",
+      resource: { uri: `${FILES}/abc/kvittering.pdf`, mimeType: "application/pdf", blob: btoa("%PDF-1.4") },
+    });
+  });
+
+  it("lists the files when there are several, and downloads the one chosen", async () => {
+    const invoice = { [`/companies/${COMPANY}/invoices/9`]: { invoicePdf: attachment("faktura.pdf"), attachments: [attachment("timeliste.pdf")] } };
+    const listed = await readFile(fiken(invoice), { type: "invoice", id: 9 });
+    expect(listed.structuredContent).toEqual({
+      files: [
+        { attachment: 1, filename: "faktura.pdf" },
+        { attachment: 2, filename: "timeliste.pdf" },
+      ],
+      note: "Velg fil med attachment.",
+    });
+
+    const transport = fiken(invoice);
+    const chosen = await readFile(transport, { type: "invoice", id: 9, attachment: 2 });
+    expect(transport.requests.at(-1)?.path).toBe("/files/abc/timeliste.pdf");
+    expect(chosen.structuredContent).toEqual({ file: { filename: "timeliste.pdf", mimeType: "application/pdf", bytes: 8, attachment: 2, of: 2 } });
+  });
+
+  it("treats the same file listed several times as one", async () => {
+    const transport = fiken({ [`/companies/${COMPANY}/sales/6/attachments`]: [attachment("vipps.pdf"), attachment("vipps.pdf")] });
+    const result = await readFile(transport, { type: "sale", id: 6 });
+    expect(result.structuredContent).toEqual({ file: { filename: "vipps.pdf", mimeType: "application/pdf", bytes: 8 } });
+  });
+
+  it.each([
+    ["ehf", `/companies/${COMPANY}/ehf/3`, { invoiceNumber: "1001", documentUrl: `${FILES}/abc/ehf.pdf` }, "ehf.pdf"],
+    ["sale", `/companies/${COMPANY}/sales/3/attachments`, [attachment("vipps.pdf")], "vipps.pdf"],
+    ["credit_note", `/companies/${COMPANY}/creditNotes/3`, { creditNotePdf: attachment("kreditnota.pdf") }, "kreditnota.pdf"],
+    ["journal_entry", `/companies/${COMPANY}/journalEntries/3/attachments`, [attachment("bilag.pdf")], "bilag.pdf"],
+  ])("reads the file of a %s", async (type, path, body, filename) => {
+    const transport = fiken({ [path]: body });
+    const result = await readFile(transport, { type, id: 3 });
+    expect(result.isError).toBeFalsy();
+    expect(transport.requests.map((request) => request.path)).toEqual([path, `/files/abc/${filename}`]);
+  });
+
+  it("says so when there is no file, or the chosen number does not exist", async () => {
+    const none = await readFile(fiken({ [`/companies/${COMPANY}/sales/4/attachments`]: [] }), { type: "sale", id: 4 });
+    expect(none.isError).toBe(true);
+    const outOfRange = await readFile(fiken({ [`/companies/${COMPANY}/sales/4/attachments`]: [attachment("a.pdf")] }), { type: "sale", id: 4, attachment: 2 });
+    expect(JSON.stringify(outOfRange.content)).toContain("Velg attachment fra 1 til 1");
+  });
+
+  it.each(["https://evil.example/api/v2/files/abc/x.pdf", "https://fiken.no/api/v2/files/abc/x.pdf", "https://api.fiken.no/other/x.pdf"])(
+    "refuses %s without sending the request",
+    async (url) => {
+      const transport = fiken({ [`/companies/${COMPANY}/inbox/77`]: { filename: "x.pdf", documentUrl: url } });
+      const result = await readFile(transport, { type: "inbox", id: 77 });
+      expect(result.isError).toBe(true);
+      expect(transport.requests).toHaveLength(1);
+    },
+  );
+
+  it("names the redirect target instead of following it", async () => {
+    const transport = fiken(
+      { [`/companies/${COMPANY}/inbox/77`]: { filename: "x.pdf", documentUrl: `${FILES}/abc/x.pdf` } },
+      () => new Response(null, { status: 302, headers: { location: "https://bucket.s3.amazonaws.com/x.pdf?sig=secret" } }),
+    );
+    const result = await readFile(transport, { type: "inbox", id: 77 });
+    expect(result.isError).toBe(true);
+    const text = JSON.stringify(result.content);
+    expect(text).toContain("bucket.s3.amazonaws.com");
+    expect(text).not.toContain("secret");
+  });
+
+  it("refuses files over 5 MB", async () => {
+    const transport = fiken(
+      { [`/companies/${COMPANY}/inbox/77`]: { filename: "stor.pdf", documentUrl: `${FILES}/abc/stor.pdf` } },
+      () => new Response(new Uint8Array(5 * 1024 * 1024 + 1), { headers: { "content-type": "application/pdf" } }),
+    );
+    const result = await readFile(transport, { type: "inbox", id: 77 });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("5 MB");
+  });
+});

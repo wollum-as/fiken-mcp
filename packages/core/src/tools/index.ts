@@ -15,6 +15,7 @@ import { finalizeDraft } from "./finalize-draft.ts";
 import { getReport } from "./get-report.ts";
 import { listCompanies } from "./list-companies.ts";
 import { readApi } from "./read-api.ts";
+import { readFile } from "./read-file.ts";
 import { registerPayment } from "./register-payment.ts";
 import { saveContact } from "./save-contact.ts";
 import { saveInvoiceDraft } from "./save-invoice-draft.ts";
@@ -33,6 +34,7 @@ export const TOOLS: readonly ToolDefinition[] = [
   findAccounts,
   findJournalEntries,
   findInbox,
+  readFile,
   getReport,
   exploreApi,
   readApi,

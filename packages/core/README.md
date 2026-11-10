@@ -1,6 +1,6 @@
 # @fiken-mcp/core
 
-The platform-independent part of Fiken MCP: the MCP server, its 24 tools, a typed client for the Fiken API v2, and the scheduler that keeps calls within Fiken's limits. It depends only on web-standard APIs, `@modelcontextprotocol/server`, `openapi-fetch` and `zod`, so it can run inside another stack, for example Fiken's own.
+The platform-independent part of Fiken MCP: the MCP server, its 25 tools, a typed client for the Fiken API v2, and the scheduler that keeps calls within Fiken's limits. It depends only on web-standard APIs, `@modelcontextprotocol/server`, `openapi-fetch` and `zod`, so it can run inside another stack, for example Fiken's own.
 
 The package is not published to npm. It exports its TypeScript source (`src/index.ts`) and uses only erasable syntax, so Node runs it directly with type stripping (tested with Node 22.22), and bundlers such as esbuild take it as is.
 
@@ -131,6 +131,7 @@ Errors the tools turn into messages for the model:
 | `find_accounts` | read | read |
 | `find_journal_entries` | read | read |
 | `find_inbox` | read | read |
+| `read_file` | read | read |
 | `get_report` | read | read |
 | `explore_api` | read | read |
 | `read_api` | read | read |
@@ -155,7 +156,7 @@ Rules every tool follows:
 - **`PUT` replaces the whole object** in Fiken, so tools fetch, merge and write, then read back.
 - **User-facing text is Norwegian**: titles, descriptions and error messages.
 - **Responses** default to 20 rows, at most 100.
-- **Budget**: all tool definitions stay under about 7,000 tokens, which a test enforces (`test/server.test.ts`).
+- **Budget**: all tool definitions stay under about 7,200 tokens, which a test enforces (`test/server.test.ts`).
 
 `explore_api` and `read_api` reach other `GET` operations in Fiken through an allowlist generated from the spec (`src/gateway/ops.gen.ts`). Never a free URL, and never anything but `GET`.
 

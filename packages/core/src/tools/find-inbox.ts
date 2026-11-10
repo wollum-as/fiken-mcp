@@ -8,7 +8,7 @@ export const findInbox = defineTool({
   access: "read",
   title: "Innboksen i Fiken",
   description:
-    "Innboksen i Fiken, nyeste først: kvitteringer og fakturaer som venter på bokføring. status: unused (standard), used, all.",
+    "Innboksen i Fiken, nyeste først: kvitteringer og fakturaer som venter på bokføring. status: unused (standard), used, all. Selve filen: read_file.",
   inputSchema: z.object({
     company: companyInput,
     id: idInput("Dokument"),
